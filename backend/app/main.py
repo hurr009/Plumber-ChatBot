@@ -47,13 +47,22 @@ def chat(req: ChatRequest) -> ChatResponse:
 @app.post("/chat/stream")
 async def stream_chat(req: ChatRequest) -> StreamingResponse:
     from .rag import stream_answer
+    import json
 
     async def generate():
         try:
             async for chunk in stream_answer(req.session_id, req.message):
-                yield chunk
+                if chunk.startswith("\n__SOURCES__"):
+                    payload = chunk[len("\n__SOURCES__"):]
+                    yield f"event: sources\ndata: {payload}\n\n"
+                else:
+                    yield f"data: {json.dumps(chunk)}\n\n"
         except Exception:
             logger.exception("stream failed")
-            yield "\n__ERROR__Failed to generate a response"
+            yield "event: error\ndata: Failed to generate a response\n\n"
 
-    return StreamingResponse(generate(), media_type="text/plain")
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
+    )

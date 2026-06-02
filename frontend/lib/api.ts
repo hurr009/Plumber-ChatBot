@@ -57,21 +57,25 @@ export async function streamMessage(
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
 
-    // Sources are sent as a final line: \n__SOURCES__[...]
-    const sourcesIdx = buffer.indexOf("\n__SOURCES__");
-    if (sourcesIdx !== -1) {
-      onChunk(buffer.slice(0, sourcesIdx));
-      const raw = buffer.slice(sourcesIdx + "\n__SOURCES__".length);
-      try { onSources(JSON.parse(raw)); } catch { /* ignore parse errors */ }
-      return;
-    }
+    // SSE messages are separated by \n\n
+    const parts = buffer.split("\n\n");
+    buffer = parts.pop() ?? ""; // last incomplete part stays in buffer
 
-    const errorIdx = buffer.indexOf("\n__ERROR__");
-    if (errorIdx !== -1) {
-      throw new Error(buffer.slice(errorIdx + "\n__ERROR__".length));
-    }
+    for (const part of parts) {
+      const lines = part.split("\n");
+      const eventLine = lines.find((l) => l.startsWith("event:"));
+      const dataLine = lines.find((l) => l.startsWith("data:"));
+      if (!dataLine) continue;
 
-    onChunk(buffer);
-    buffer = "";
+      const raw = dataLine.slice("data:".length).trim();
+      const eventType = eventLine ? eventLine.slice("event:".length).trim() : "message";
+
+      if (eventType === "error") throw new Error(raw);
+      if (eventType === "sources") {
+        try { onSources(JSON.parse(raw)); } catch { /* ignore */ }
+      } else {
+        try { onChunk(JSON.parse(raw)); } catch { onChunk(raw); }
+      }
+    }
   }
 }
