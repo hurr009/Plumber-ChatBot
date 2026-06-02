@@ -16,8 +16,9 @@ const GREETING: ChatMessage = {
 export default function ChatWindow() {
   const [messages, setMessages] = useState<ChatMessage[]>([GREETING]);
   const [loading, setLoading] = useState(false);
-  const [streaming, setStreaming] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const pendingChunks = useRef<string>("");
+  const rafId = useRef<number | null>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -26,32 +27,39 @@ export default function ChatWindow() {
   async function handleSend(text: string) {
     setMessages((prev) => [...prev, { role: "user", text }]);
     setLoading(true);
+    pendingChunks.current = "";
+
+    function flush() {
+      rafId.current = null;
+      const text = pendingChunks.current;
+      if (!text) return;
+      pendingChunks.current = "";
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (last?.role === "bot") {
+          const updated = [...prev];
+          updated[updated.length - 1] = { role: "bot", text: last.text + text };
+          return updated;
+        }
+        return [...prev, { role: "bot", text }];
+      });
+    }
 
     try {
       await streamMessage(
         text,
         (chunk) => {
           setLoading(false);
-          setStreaming(true);
-          setMessages((prev) => {
-            const last = prev[prev.length - 1];
-            if (last?.role === "bot") {
-              // Append to existing bot bubble
-              const updated = [...prev];
-              updated[updated.length - 1] = {
-                role: "bot",
-                text: updated[updated.length - 1].text + chunk,
-              };
-              return updated;
-            }
-            // First chunk — add a new bot bubble
-            return [...prev, { role: "bot", text: chunk }];
-          });
+          pendingChunks.current += chunk;
+          if (rafId.current === null) {
+            rafId.current = requestAnimationFrame(flush);
+          }
         },
-        () => {
-          // sources received — could display them later
-        },
+        () => {},
       );
+      // flush any remaining tokens after stream ends
+      if (rafId.current !== null) cancelAnimationFrame(rafId.current);
+      flush();
     } catch {
       setMessages((prev) => [
         ...prev,
@@ -59,7 +67,6 @@ export default function ChatWindow() {
       ]);
     } finally {
       setLoading(false);
-      setStreaming(false);
     }
   }
 
