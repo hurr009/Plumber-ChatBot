@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { sendMessage } from "@/lib/api";
+import { streamMessage } from "@/lib/api";
 import MessageBubble, { ChatMessage } from "./MessageBubble";
 import TypingIndicator from "./TypingIndicator";
 import ChatInput from "./ChatInput";
@@ -16,6 +16,7 @@ const GREETING: ChatMessage = {
 export default function ChatWindow() {
   const [messages, setMessages] = useState<ChatMessage[]>([GREETING]);
   const [loading, setLoading] = useState(false);
+  const [streaming, setStreaming] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -25,16 +26,45 @@ export default function ChatWindow() {
   async function handleSend(text: string) {
     setMessages((prev) => [...prev, { role: "user", text }]);
     setLoading(true);
+
     try {
-      const { answer } = await sendMessage(text);
-      setMessages((prev) => [...prev, { role: "bot", text: answer }]);
+      await streamMessage(
+        text,
+        (chunk) => {
+          setMessages((prev) => {
+            const last = prev[prev.length - 1];
+            // First chunk: replace typing indicator with the bot bubble
+            if (!streaming && last?.role !== "bot") {
+              setStreaming(true);
+              setLoading(false);
+              return [...prev, { role: "bot", text: chunk }];
+            }
+            setStreaming(true);
+            setLoading(false);
+            const updated = [...prev];
+            updated[updated.length - 1] = {
+              role: "bot",
+              text: updated[updated.length - 1].text + chunk,
+            };
+            return updated;
+          });
+        },
+        () => {
+          // sources received — could display them later
+        },
+      );
     } catch {
-      setMessages((prev) => [
-        ...prev,
-        { role: "bot", text: "Sorry — something went wrong. Please try again." },
-      ]);
+      setMessages((prev) => {
+        const updated = [...prev];
+        updated[updated.length - 1] = {
+          role: "bot",
+          text: "Sorry — something went wrong. Please try again.",
+        };
+        return updated;
+      });
     } finally {
       setLoading(false);
+      setStreaming(false);
     }
   }
 
