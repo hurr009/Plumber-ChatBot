@@ -1,14 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { streamMessage } from "@/lib/api";
 import {
-  streamMessage,
-  loadHistory,
-  saveHistory,
-  clearHistory,
-  type HistoryMessage,
-} from "@/lib/api";
+  loadConversations,
+  saveConversations,
+  getActiveId,
+  setActiveId,
+  createConversation,
+  titleFromMessage,
+  type Conversation,
+} from "@/lib/conversations";
 import MessageBubble, { ChatMessage } from "./MessageBubble";
+import ConversationSidebar from "./ConversationSidebar";
 import TypingIndicator from "./TypingIndicator";
 import ChatInput from "./ChatInput";
 
@@ -19,55 +23,115 @@ const GREETING: ChatMessage = {
   text: `Hi! I'm ${BOT_NAME}. Ask me anything and I'll answer from our knowledge base.`,
 };
 
-function historyToMessages(history: HistoryMessage[]): ChatMessage[] {
-  return history.map((m) => ({
-    role: m.role === "user" ? "user" : "bot",
-    text: m.content,
-  }));
-}
-
 export default function ChatWindow() {
-  const [messages, setMessages] = useState<ChatMessage[]>([GREETING]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [activeId, setActiveIdState] = useState<string>("");
   const [loading, setLoading] = useState(false);
-  const historyRef = useRef<HistoryMessage[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const pendingChunks = useRef<string>("");
   const rafId = useRef<number | null>(null);
 
-  // Restore history from localStorage on first mount
+  // Load from localStorage on mount
   useEffect(() => {
-    const saved = loadHistory();
-    if (saved.length > 0) {
-      historyRef.current = saved;
-      setMessages([GREETING, ...historyToMessages(saved)]);
+    const saved = loadConversations();
+    const savedActiveId = getActiveId();
+
+    if (saved.length === 0) {
+      const fresh = createConversation();
+      setConversations([fresh]);
+      setActiveIdState(fresh.id);
+      setActiveId(fresh.id);
+    } else {
+      setConversations(saved);
+      const active = savedActiveId && saved.find((c) => c.id === savedActiveId)
+        ? savedActiveId
+        : saved[0].id;
+      setActiveIdState(active);
+      setActiveId(active);
     }
   }, []);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, loading]);
+  }, [conversations, activeId, loading]);
+
+  const activeConvo = conversations.find((c) => c.id === activeId);
+  const displayMessages: ChatMessage[] = activeConvo
+    ? [GREETING, ...activeConvo.messages]
+    : [GREETING];
+
+  function updateConvo(id: string, updater: (c: Conversation) => Conversation) {
+    setConversations((prev) => {
+      const updated = prev.map((c) => (c.id === id ? updater(c) : c));
+      saveConversations(updated);
+      return updated;
+    });
+  }
+
+  function handleSelectConvo(id: string) {
+    setActiveIdState(id);
+    setActiveId(id);
+  }
+
+  function handleNewConvo() {
+    const fresh = createConversation();
+    setConversations((prev) => {
+      const updated = [fresh, ...prev];
+      saveConversations(updated);
+      return updated;
+    });
+    setActiveIdState(fresh.id);
+    setActiveId(fresh.id);
+  }
+
+  function handleDeleteConvo(id: string) {
+    setConversations((prev) => {
+      const updated = prev.filter((c) => c.id !== id);
+      saveConversations(updated);
+
+      if (id === activeId) {
+        const next = updated[0] ?? createConversation();
+        if (updated.length === 0) {
+          saveConversations([next]);
+          setConversations([next]);
+        }
+        setActiveIdState(next.id);
+        setActiveId(next.id);
+      }
+      return updated.length > 0 ? updated : conversations.filter((c) => c.id !== id);
+    });
+  }
 
   async function handleSend(text: string) {
-    setMessages((prev) => [...prev, { role: "user", text }]);
+    if (!activeId) return;
+
+    // Optimistically add user message to UI
+    updateConvo(activeId, (c) => ({
+      ...c,
+      // auto-title from first user message
+      title: c.history.length === 0 ? titleFromMessage(text) : c.title,
+      messages: [...c.messages, { role: "user", text }],
+      updatedAt: Date.now(),
+    }));
+
     setLoading(true);
     pendingChunks.current = "";
 
-    // snapshot history before this turn to send to backend
-    const historySnapshot = [...historyRef.current];
+    const historySnapshot = activeConvo?.history ?? [];
 
     function flush() {
       rafId.current = null;
-      const text = pendingChunks.current;
-      if (!text) return;
+      const buffered = pendingChunks.current;
+      if (!buffered) return;
       pendingChunks.current = "";
-      setMessages((prev) => {
-        const last = prev[prev.length - 1];
+      updateConvo(activeId, (c) => {
+        const last = c.messages[c.messages.length - 1];
         if (last?.role === "bot") {
-          const updated = [...prev];
-          updated[updated.length - 1] = { role: "bot", text: last.text + text, streaming: true };
-          return updated;
+          const updated = [...c.messages];
+          updated[updated.length - 1] = { role: "bot", text: last.text + buffered, streaming: true };
+          return { ...c, messages: updated };
         }
-        return [...prev, { role: "bot", text, streaming: true }];
+        return { ...c, messages: [...c.messages, { role: "bot", text: buffered, streaming: true }] };
       });
     }
 
@@ -87,74 +151,74 @@ export default function ChatWindow() {
         },
         () => {},
       );
+
       if (rafId.current !== null) cancelAnimationFrame(rafId.current);
       flush();
-      setMessages((prev) => {
-        const updated = [...prev];
+
+      // Mark streaming done + persist history
+      updateConvo(activeId, (c) => {
+        const updated = [...c.messages];
         const last = updated[updated.length - 1];
         if (last?.role === "bot") updated[updated.length - 1] = { ...last, streaming: false };
-        return updated;
+        return {
+          ...c,
+          messages: updated,
+          history: [
+            ...historySnapshot,
+            { role: "user", content: text },
+            { role: "assistant", content: botAnswer },
+          ],
+          updatedAt: Date.now(),
+        };
       });
-
-      // persist this turn to localStorage
-      const newHistory: HistoryMessage[] = [
-        ...historySnapshot,
-        { role: "user", content: text },
-        { role: "assistant", content: botAnswer },
-      ];
-      historyRef.current = newHistory;
-      saveHistory(newHistory);
     } catch {
-      setMessages((prev) => [
-        ...prev,
-        { role: "bot", text: "Sorry — something went wrong. Please try again." },
-      ]);
+      updateConvo(activeId, (c) => ({
+        ...c,
+        messages: [
+          ...c.messages,
+          { role: "bot", text: "Sorry — something went wrong. Please try again." },
+        ],
+      }));
     } finally {
       setLoading(false);
     }
   }
 
-  function handleClear() {
-    clearHistory();
-    historyRef.current = [];
-    setMessages([GREETING]);
-  }
-
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden bg-slate-50">
-      {/* Header */}
-      <header className="flex items-center gap-3 bg-gradient-to-r from-brand to-brand-dark px-4 py-3 text-white shadow">
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-lg">
-          🔧
-        </div>
-        <div className="flex-1">
-          <p className="text-sm font-semibold leading-tight">{BOT_NAME}</p>
-          <p className="text-xs text-white/80">Online</p>
-        </div>
-        {historyRef.current.length > 0 && (
-          <button
-            onClick={handleClear}
-            className="rounded px-2 py-1 text-xs text-white/70 hover:bg-white/10 hover:text-white transition-colors"
-            title="Clear chat history"
-          >
-            Clear
-          </button>
-        )}
-      </header>
+    <div className="flex h-full w-full overflow-hidden">
+      <ConversationSidebar
+        conversations={conversations}
+        activeId={activeId}
+        onSelect={handleSelectConvo}
+        onNew={handleNewConvo}
+        onDelete={handleDeleteConvo}
+      />
 
-      {/* Messages */}
-      <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
-        {messages.map((m, i) => (
-          <MessageBubble key={i} message={m} />
-        ))}
-        {loading && <TypingIndicator />}
+      {/* Chat panel */}
+      <div className="flex flex-1 flex-col overflow-hidden bg-slate-50">
+        <header className="flex items-center gap-3 bg-gradient-to-r from-brand to-brand-dark px-4 py-3 text-white shadow">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-lg">
+            🔧
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-semibold leading-tight">{BOT_NAME}</p>
+            <p className="text-xs text-white/80">Online</p>
+          </div>
+        </header>
+
+        <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
+          {displayMessages.map((m, i) => (
+            <MessageBubble key={i} message={m} />
+          ))}
+          {loading && <TypingIndicator />}
+        </div>
+
+        <ChatInput onSend={handleSend} disabled={loading} />
+
+        <p className="bg-white pb-2 text-center text-[10px] text-slate-400">
+          Powered by {BOT_NAME}
+        </p>
       </div>
-
-      <ChatInput onSend={handleSend} disabled={loading} />
-
-      <p className="bg-white pb-2 text-center text-[10px] text-slate-400">
-        Powered by {BOT_NAME}
-      </p>
     </div>
   );
 }

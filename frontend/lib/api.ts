@@ -1,6 +1,4 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-const MAX_HISTORY = 20; // max messages kept in localStorage
-const HISTORY_KEY = "plumber_bot_history";
 const SESSION_KEY = "plumber_bot_session_id";
 
 export interface Source {
@@ -28,27 +26,6 @@ export function getSessionId(): string {
   return id;
 }
 
-export function loadHistory(): HistoryMessage[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(HISTORY_KEY);
-    return raw ? (JSON.parse(raw) as HistoryMessage[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-export function saveHistory(history: HistoryMessage[]): void {
-  if (typeof window === "undefined") return;
-  // keep only the last MAX_HISTORY messages
-  const trimmed = history.slice(-MAX_HISTORY);
-  window.localStorage.setItem(HISTORY_KEY, JSON.stringify(trimmed));
-}
-
-export function clearHistory(): void {
-  if (typeof window === "undefined") return;
-  window.localStorage.removeItem(HISTORY_KEY);
-}
 
 export async function sendMessage(message: string, history: HistoryMessage[]): Promise<ChatResult> {
   const res = await fetch(`${API_URL}/chat`, {
