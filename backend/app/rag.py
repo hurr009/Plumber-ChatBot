@@ -96,22 +96,20 @@ async def stream_answer(session_id: str, message: str):
 
     full_answer = ""
     docs = []
-    in_answer_llm = False
+    answer_run_id: str | None = None
     async for event in chain.astream_events(
         {"input": message, "chat_history": history.messages},
         version="v2",
     ):
         kind = event["event"]
         # The retrieval chain emits two LLM calls:
-        #   1. history_aware_retriever → reformulates the question (we must skip this)
-        #   2. stuff_documents_chain   → the actual answer (we want this)
-        # We detect entry/exit of the answer LLM by watching for the
-        # "combine_docs_chain" parent in the event's run name.
+        #   1. history_aware_retriever → reformulates the question (skip)
+        #   2. stuff_documents_chain   → the actual answer (capture)
+        # We capture the run_id of stuff_documents_chain and only stream
+        # tokens whose parent_ids include that run_id.
         if kind == "on_chain_start" and event.get("name") == "stuff_documents_chain":
-            in_answer_llm = True
-        elif kind == "on_chain_end" and event.get("name") == "stuff_documents_chain":
-            in_answer_llm = False
-        elif kind == "on_chat_model_stream" and in_answer_llm:
+            answer_run_id = event["run_id"]
+        elif kind == "on_chat_model_stream" and answer_run_id in event.get("parent_ids", []):
             chunk = event["data"]["chunk"]
             if isinstance(chunk, AIMessageChunk) and chunk.content:
                 full_answer += chunk.content
