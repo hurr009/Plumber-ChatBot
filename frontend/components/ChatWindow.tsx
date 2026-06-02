@@ -31,22 +31,21 @@ export default function ChatWindow() {
       await streamMessage(
         text,
         (chunk) => {
+          setLoading(false);
+          setStreaming(true);
           setMessages((prev) => {
             const last = prev[prev.length - 1];
-            // First chunk: replace typing indicator with the bot bubble
-            if (!streaming && last?.role !== "bot") {
-              setStreaming(true);
-              setLoading(false);
-              return [...prev, { role: "bot", text: chunk }];
+            if (last?.role === "bot") {
+              // Append to existing bot bubble
+              const updated = [...prev];
+              updated[updated.length - 1] = {
+                role: "bot",
+                text: updated[updated.length - 1].text + chunk,
+              };
+              return updated;
             }
-            setStreaming(true);
-            setLoading(false);
-            const updated = [...prev];
-            updated[updated.length - 1] = {
-              role: "bot",
-              text: updated[updated.length - 1].text + chunk,
-            };
-            return updated;
+            // First chunk — add a new bot bubble
+            return [...prev, { role: "bot", text: chunk }];
           });
         },
         () => {
@@ -54,14 +53,10 @@ export default function ChatWindow() {
         },
       );
     } catch {
-      setMessages((prev) => {
-        const updated = [...prev];
-        updated[updated.length - 1] = {
-          role: "bot",
-          text: "Sorry — something went wrong. Please try again.",
-        };
-        return updated;
-      });
+      setMessages((prev) => [
+        ...prev,
+        { role: "bot", text: "Sorry — something went wrong. Please try again." },
+      ]);
     } finally {
       setLoading(false);
       setStreaming(false);
