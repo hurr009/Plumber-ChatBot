@@ -3,6 +3,7 @@ import logging
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 
 from .config import get_settings
 from .schemas import ChatRequest, ChatResponse, HealthResponse
@@ -41,3 +42,18 @@ def chat(req: ChatRequest) -> ChatResponse:
         raise HTTPException(status_code=500, detail="Failed to generate a response") from exc
 
     return ChatResponse(answer=answer, sources=sources)
+
+
+@app.post("/chat/stream")
+async def stream_chat(req: ChatRequest) -> StreamingResponse:
+    from .rag import stream_answer
+
+    async def generate():
+        try:
+            async for chunk in stream_answer(req.session_id, req.message):
+                yield chunk
+        except Exception:
+            logger.exception("stream failed")
+            yield "\n__ERROR__Failed to generate a response"
+
+    return StreamingResponse(generate(), media_type="text/plain")

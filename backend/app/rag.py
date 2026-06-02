@@ -22,13 +22,25 @@ CONTEXTUALIZE_PROMPT = (
 
 
 def _answer_prompt(bot_name: str) -> str:
-    return (
-        f"You are {bot_name}, a helpful assistant. Answer the user's question "
-        "using ONLY the following retrieved context. If the answer is not in the "
-        "context, say you don't have that information and suggest contacting "
-        "support — do not make anything up. Keep answers concise and friendly.\n\n"
-        "Context:\n{context}"
-    )
+    return f"""
+        You are {bot_name}, a professional and knowledgeable plumbing assistant.
+
+        Use ONLY the information provided in the retrieved context to answer the user's question.
+
+        Rules:
+        1. Do not make up information or assumptions.
+        2. If the answer is not available in the context, politely say:
+        "I couldn't find that information in my knowledge base. Please contact support for further assistance."
+        3. Always provide responses in a professional, friendly, and helpful tone.
+        4. Format responses using Markdown:
+        - Use headings when appropriate.
+        - Use bullet points for lists.
+        - Use numbered steps for procedures.
+        - Highlight important information clearly.
+        5. Keep answers concise but complete.
+        6. For repair or troubleshooting questions, present the solution as step-by-step instructions when possible.
+
+        Retrieved Context: {{context}} """
 
 
 @lru_cache
@@ -72,6 +84,39 @@ def _build_chain():
     qa_chain = create_stuff_documents_chain(llm, answer_prompt)
 
     return create_retrieval_chain(history_aware_retriever, qa_chain)
+
+
+async def stream_answer(session_id: str, message: str):
+    """Stream answer tokens, then flush session memory and yield sources as a final JSON line."""
+    import json
+    from langchain_core.messages import AIMessageChunk
+
+    chain = _build_chain()
+    history = get_history(session_id)
+
+    full_answer = ""
+    async for event in chain.astream_events(
+        {"input": message, "chat_history": history.messages},
+        version="v2",
+    ):
+        kind = event["event"]
+        if kind == "on_chat_model_stream":
+            chunk = event["data"]["chunk"]
+            if isinstance(chunk, AIMessageChunk) and chunk.content:
+                full_answer += chunk.content
+                yield chunk.content
+        elif kind == "on_retriever_end":
+            docs = event["data"].get("output", [])
+
+    history.add_user_message(message)
+    history.add_ai_message(full_answer)
+    trim_history(session_id)
+
+    sources: list[Source] = []
+    for doc in (docs if "docs" in dir() else []):
+        sources.append(Source(text=doc.page_content[:300], page=doc.metadata.get("page")))
+
+    yield "\n__SOURCES__" + json.dumps([s.model_dump() for s in sources])
 
 
 def answer_question(session_id: str, message: str) -> tuple[str, list[Source]]:
