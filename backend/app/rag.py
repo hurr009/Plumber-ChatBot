@@ -4,14 +4,14 @@ from functools import lru_cache
 
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_community.embeddings import FastEmbedEmbeddings
 from langchain_groq import ChatGroq
 from langchain_pinecone import PineconeVectorStore
 
 from .config import get_settings
-from .schemas import Source
-from .session import get_history, trim_history
+from .schemas import HistoryMessage, Source
 
 CONTEXTUALIZE_PROMPT = (
     "Given a chat history and the latest user question which might reference "
@@ -47,10 +47,8 @@ def _answer_prompt(bot_name: str) -> str:
 def _build_chain():
     settings = get_settings()
 
-    # langchain-pinecone reads from the environment.
     os.environ.setdefault("PINECONE_API_KEY", settings.pinecone_api_key)
 
-    # FastEmbed runs locally via ONNX — no API key, no torch needed.
     embeddings = FastEmbedEmbeddings(model_name=settings.embed_model)
 
     vector_store = PineconeVectorStore(
@@ -86,27 +84,33 @@ def _build_chain():
     return create_retrieval_chain(history_aware_retriever, qa_chain)
 
 
-async def stream_answer(session_id: str, message: str):
-    """Stream answer tokens, then flush session memory and yield sources as a final JSON line."""
+def _to_lc_messages(history: list[HistoryMessage]):
+    """Convert frontend history format to LangChain message objects."""
+    result = []
+    for m in history:
+        if m.role == "user":
+            result.append(HumanMessage(content=m.content))
+        else:
+            result.append(AIMessage(content=m.content))
+    return result
+
+
+async def stream_answer(history: list[HistoryMessage], message: str):
+    """Stream answer tokens then yield sources as a final JSON line."""
     import json
     from langchain_core.messages import AIMessageChunk
 
     chain = _build_chain()
-    history = get_history(session_id)
+    lc_history = _to_lc_messages(history)
 
     full_answer = ""
     docs = []
     answer_run_id: str | None = None
     async for event in chain.astream_events(
-        {"input": message, "chat_history": history.messages},
+        {"input": message, "chat_history": lc_history},
         version="v2",
     ):
         kind = event["event"]
-        # The retrieval chain emits two LLM calls:
-        #   1. history_aware_retriever → reformulates the question (skip)
-        #   2. stuff_documents_chain   → the actual answer (capture)
-        # We capture the run_id of stuff_documents_chain and only stream
-        # tokens whose parent_ids include that run_id.
         if kind == "on_chain_start" and event.get("name") == "stuff_documents_chain":
             answer_run_id = event["run_id"]
         elif kind == "on_chat_model_stream" and answer_run_id in event.get("parent_ids", []):
@@ -117,10 +121,6 @@ async def stream_answer(session_id: str, message: str):
         elif kind == "on_retriever_end":
             docs = event["data"].get("output", [])
 
-    history.add_user_message(message)
-    history.add_ai_message(full_answer)
-    trim_history(session_id)
-
     sources: list[Source] = []
     for doc in docs:
         sources.append(Source(text=doc.page_content[:300], page=doc.metadata.get("page")))
@@ -128,29 +128,16 @@ async def stream_answer(session_id: str, message: str):
     yield "\n__SOURCES__" + json.dumps([s.model_dump() for s in sources])
 
 
-def answer_question(session_id: str, message: str) -> tuple[str, list[Source]]:
-    """Run the RAG chain for one turn and update session memory."""
+def answer_question(history: list[HistoryMessage], message: str) -> tuple[str, list[Source]]:
+    """Run the RAG chain for one turn (non-streaming)."""
     chain = _build_chain()
-    history = get_history(session_id)
+    lc_history = _to_lc_messages(history)
 
-    result = chain.invoke({
-        "input": message,
-        "chat_history": history.messages,
-    })
-
+    result = chain.invoke({"input": message, "chat_history": lc_history})
     answer = result["answer"]
-
-    history.add_user_message(message)
-    history.add_ai_message(answer)
-    trim_history(session_id)
 
     sources: list[Source] = []
     for doc in result.get("context", []):
-        sources.append(
-            Source(
-                text=doc.page_content[:300],
-                page=doc.metadata.get("page"),
-            )
-        )
+        sources.append(Source(text=doc.page_content[:300], page=doc.metadata.get("page")))
 
     return answer, sources

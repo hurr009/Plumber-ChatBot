@@ -1,4 +1,7 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const MAX_HISTORY = 20; // max messages kept in localStorage
+const HISTORY_KEY = "plumber_bot_history";
+const SESSION_KEY = "plumber_bot_session_id";
 
 export interface Source {
   text: string;
@@ -10,7 +13,10 @@ export interface ChatResult {
   sources: Source[];
 }
 
-const SESSION_KEY = "plumber_bot_session_id";
+export interface HistoryMessage {
+  role: "user" | "assistant";
+  content: string;
+}
 
 export function getSessionId(): string {
   if (typeof window === "undefined") return "server";
@@ -22,14 +28,36 @@ export function getSessionId(): string {
   return id;
 }
 
-export async function sendMessage(message: string): Promise<ChatResult> {
+export function loadHistory(): HistoryMessage[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(HISTORY_KEY);
+    return raw ? (JSON.parse(raw) as HistoryMessage[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveHistory(history: HistoryMessage[]): void {
+  if (typeof window === "undefined") return;
+  // keep only the last MAX_HISTORY messages
+  const trimmed = history.slice(-MAX_HISTORY);
+  window.localStorage.setItem(HISTORY_KEY, JSON.stringify(trimmed));
+}
+
+export function clearHistory(): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(HISTORY_KEY);
+}
+
+export async function sendMessage(message: string, history: HistoryMessage[]): Promise<ChatResult> {
   const res = await fetch(`${API_URL}/chat`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "ngrok-skip-browser-warning": "1",
     },
-    body: JSON.stringify({ session_id: getSessionId(), message }),
+    body: JSON.stringify({ session_id: getSessionId(), message, history }),
   });
 
   if (!res.ok) {
@@ -40,6 +68,7 @@ export async function sendMessage(message: string): Promise<ChatResult> {
 
 export async function streamMessage(
   message: string,
+  history: HistoryMessage[],
   onChunk: (text: string) => void,
   onSources: (sources: Source[]) => void,
 ): Promise<void> {
@@ -49,7 +78,7 @@ export async function streamMessage(
       "Content-Type": "application/json",
       "ngrok-skip-browser-warning": "1",
     },
-    body: JSON.stringify({ session_id: getSessionId(), message }),
+    body: JSON.stringify({ session_id: getSessionId(), message, history }),
   });
 
   if (!res.ok) throw new Error(`Request failed (${res.status})`);
