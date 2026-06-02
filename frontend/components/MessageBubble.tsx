@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 export interface ChatMessage {
   role: "user" | "bot";
   text: string;
+  streaming?: boolean;
 }
 
 export default function MessageBubble({ message }: { message: ChatMessage }) {
@@ -17,7 +18,7 @@ export default function MessageBubble({ message }: { message: ChatMessage }) {
             : "rounded-bl-md bg-white text-slate-800 ring-1 ring-slate-200",
         ].join(" ")}
       >
-        {isUser ? (
+        {isUser || message.streaming ? (
           <span className="whitespace-pre-wrap">{message.text}</span>
         ) : (
           <ReactMarkdown

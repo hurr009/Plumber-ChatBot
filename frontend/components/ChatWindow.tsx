@@ -38,10 +38,10 @@ export default function ChatWindow() {
         const last = prev[prev.length - 1];
         if (last?.role === "bot") {
           const updated = [...prev];
-          updated[updated.length - 1] = { role: "bot", text: last.text + text };
+          updated[updated.length - 1] = { role: "bot", text: last.text + text, streaming: true };
           return updated;
         }
-        return [...prev, { role: "bot", text }];
+        return [...prev, { role: "bot", text, streaming: true }];
       });
     }
 
@@ -57,9 +57,15 @@ export default function ChatWindow() {
         },
         () => {},
       );
-      // flush any remaining tokens after stream ends
+      // flush remaining tokens then mark streaming done so markdown renders
       if (rafId.current !== null) cancelAnimationFrame(rafId.current);
       flush();
+      setMessages((prev) => {
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+        if (last?.role === "bot") updated[updated.length - 1] = { ...last, streaming: false };
+        return updated;
+      });
     } catch {
       setMessages((prev) => [
         ...prev,
