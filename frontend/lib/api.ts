@@ -25,7 +25,10 @@ export function getSessionId(): string {
 export async function sendMessage(message: string): Promise<ChatResult> {
   const res = await fetch(`${API_URL}/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "ngrok-skip-browser-warning": "1",
+    },
     body: JSON.stringify({ session_id: getSessionId(), message }),
   });
 
@@ -42,7 +45,10 @@ export async function streamMessage(
 ): Promise<void> {
   const res = await fetch(`${API_URL}/chat/stream`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "ngrok-skip-browser-warning": "1",
+    },
     body: JSON.stringify({ session_id: getSessionId(), message }),
   });
 
