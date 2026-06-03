@@ -1,12 +1,12 @@
 """FastAPI application exposing the chat endpoint for the widget."""
 import logging
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 from .config import get_settings
-from .schemas import ChatRequest, ChatResponse, HealthResponse
+from .schemas import ChatRequest, HealthResponse
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("plumber-bot")
@@ -41,18 +41,6 @@ def get_providers():
         },
     }
 
-
-@app.post("/chat", response_model=ChatResponse)
-def chat(req: ChatRequest) -> ChatResponse:
-    from .rag import answer_question
-
-    try:
-        answer, sources = answer_question(req.history, req.message, req.llm_provider)
-    except Exception as exc:
-        logger.exception("chat failed")
-        raise HTTPException(status_code=500, detail="Failed to generate a response") from exc
-
-    return ChatResponse(answer=answer, sources=sources)
 
 
 @app.post("/chat/stream")

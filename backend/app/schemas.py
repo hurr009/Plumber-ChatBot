@@ -19,10 +19,6 @@ class Source(BaseModel):
     page: int | None = None
 
 
-class ChatResponse(BaseModel):
-    answer: str
-    sources: list[Source] = []
-
 
 class HealthResponse(BaseModel):
     status: str = "ok"

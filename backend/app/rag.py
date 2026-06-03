@@ -142,16 +142,3 @@ async def stream_answer(history: list[HistoryMessage], message: str, provider: s
     yield "\n__SOURCES__" + json.dumps([s.model_dump() for s in sources])
 
 
-def answer_question(history: list[HistoryMessage], message: str, provider: str | None = None) -> tuple[str, list[Source]]:
-    """Run the RAG chain for one turn (non-streaming)."""
-    chain = _build_chain(provider)
-    lc_history = _to_lc_messages(history)
-
-    result = chain.invoke({"input": message, "chat_history": lc_history})
-    answer = result["answer"]
-
-    sources: list[Source] = []
-    for doc in result.get("context", []):
-        sources.append(Source(text=doc.page_content[:300], page=doc.metadata.get("page")))
-
-    return answer, sources

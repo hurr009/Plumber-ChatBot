@@ -6,11 +6,6 @@ export interface Source {
   page: number | null;
 }
 
-export interface ChatResult {
-  answer: string;
-  sources: Source[];
-}
-
 export interface HistoryMessage {
   role: "user" | "assistant";
   content: string;
@@ -38,22 +33,6 @@ export async function fetchProviders(): Promise<ProvidersResult> {
   });
   if (!res.ok) throw new Error("Failed to fetch providers");
   return res.json();
-}
-
-export async function sendMessage(message: string, history: HistoryMessage[]): Promise<ChatResult> {
-  const res = await fetch(`${API_URL}/chat`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "ngrok-skip-browser-warning": "1",
-    },
-    body: JSON.stringify({ session_id: getSessionId(), message, history }),
-  });
-
-  if (!res.ok) {
-    throw new Error(`Request failed (${res.status})`);
-  }
-  return (await res.json()) as ChatResult;
 }
 
 export async function streamMessage(
