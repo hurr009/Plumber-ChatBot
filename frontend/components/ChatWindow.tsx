@@ -13,11 +13,12 @@ import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  Wrench, Moon, Sun, Plus, Trash2, MessageSquare,
+  Wrench, Plus, Trash2, MessageSquare,
   Home, Zap, Sparkles, Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import MessageBubble, { ChatMessage } from "./MessageBubble";
+import DocumentUpload from "./DocumentUpload";
 import TypingIndicator from "./TypingIndicator";
 import ChatInput from "./ChatInput";
 
@@ -73,7 +74,6 @@ export default function ChatWindow() {
   const [loading, setLoading] = useState(false);
   const [streamingText, setStreamingText] = useState<string | null>(null);
   const [activeProvider, setActiveProvider] = useState<"groq" | "openai">("groq");
-  const [darkMode, setDarkMode] = useState(false);
   const [showProviderPanel, setShowProviderPanel] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -93,23 +93,11 @@ export default function ChatWindow() {
       setActiveId(active);
     }
     fetchProviders().then((r) => setActiveProvider(r.active)).catch(() => {});
-    const storedDark = localStorage.getItem("darkMode") === "true";
-    setDarkMode(storedDark);
-    document.documentElement.classList.toggle("dark", storedDark);
   }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [conversations, activeId, loading, streamingText]);
-
-  function toggleDarkMode() {
-    setDarkMode((prev) => {
-      const next = !prev;
-      document.documentElement.classList.toggle("dark", next);
-      localStorage.setItem("darkMode", String(next));
-      return next;
-    });
-  }
 
   const activeConvo = conversations.find((c) => c.id === activeId);
   const sorted = [...conversations].sort((a, b) => b.updatedAt - a.updatedAt);
@@ -249,23 +237,12 @@ export default function ChatWindow() {
           <TooltipContent side="right">Model settings</TooltipContent>
         </Tooltip>
 
-        <Tooltip>
-          <TooltipTrigger>
-            <button
-              onClick={toggleDarkMode}
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-blue-300 transition-colors hover:bg-white/10 hover:text-white"
-            >
-              {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="right">{darkMode ? "Light mode" : "Dark mode"}</TooltipContent>
-        </Tooltip>
       </div>
 
-      {/* ── Panel 2: Conversation list (or model panel) ── */}
+      {/* ── Panel 2: Conversation list (or settings panel) ── */}
       <div className="flex w-56 shrink-0 flex-col border-r border-border bg-background dark:bg-card">
         {showProviderPanel ? (
-          <>
+          <ScrollArea className="flex-1">
             <div className="px-4 py-4">
               <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">AI Model</p>
             </div>
@@ -297,7 +274,12 @@ export default function ChatWindow() {
                 );
               })}
             </div>
-          </>
+            <Separator className="my-1" />
+            <div className="px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">Knowledge Base</p>
+            </div>
+            <DocumentUpload variant="compact" />
+          </ScrollArea>
         ) : (
           <>
             <div className="flex items-center justify-between px-4 py-4">

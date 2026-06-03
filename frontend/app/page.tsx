@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import DocumentUpload from "@/components/DocumentUpload";
 import {
   Wrench, Zap, Shield, Clock, MessageSquare,
   ChevronRight, CheckCircle2, Star, ArrowRight,
@@ -114,6 +115,10 @@ function ChatPreview() {
   );
 }
 
+function scrollTo(id: string) {
+  document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
+}
+
 export default function LandingPage() {
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -128,9 +133,9 @@ export default function LandingPage() {
             <span className="text-sm font-bold tracking-tight">Plumber Bot</span>
           </div>
           <div className="hidden items-center gap-6 text-sm text-muted-foreground md:flex">
-            <a href="#features" className="transition-colors hover:text-foreground">Features</a>
-            <a href="#how-it-works" className="transition-colors hover:text-foreground">How it works</a>
-            <a href="#demo" className="transition-colors hover:text-foreground">Demo</a>
+            <button onClick={() => scrollTo("features")} className="transition-colors hover:text-foreground">Features</button>
+            <button onClick={() => scrollTo("how-it-works")} className="transition-colors hover:text-foreground">How it works</button>
+            <button onClick={() => scrollTo("demo")} className="transition-colors hover:text-foreground">Demo</button>
           </div>
           <div className="ml-auto flex items-center gap-3">
             <Link href="/chat">
@@ -187,11 +192,9 @@ export default function LandingPage() {
                     Start chatting <ArrowRight className="h-4 w-4" />
                   </Button>
                 </Link>
-                <a href="#demo">
-                  <Button size="lg" variant="outline" className="gap-2 px-6">
-                    See live demo
-                  </Button>
-                </a>
+                <Button size="lg" variant="outline" className="gap-2 px-6" onClick={() => scrollTo("demo")}>
+                  See live demo
+                </Button>
               </div>
               <div className="flex items-center gap-4 pt-2">
                 <div className="flex -space-x-2">
@@ -283,9 +286,15 @@ export default function LandingPage() {
             Ready to give your customers instant answers?
           </h2>
           <p className="mt-4 text-muted-foreground">
-            Open the chat app and start asking questions right now — no sign-up required.
+            Upload your knowledge base PDF, then open the chat — no sign-up required.
           </p>
-          <div className="mt-8 flex flex-wrap justify-center gap-3">
+
+          {/* Upload card */}
+          <div className="mt-8 w-full max-w-md mx-auto text-left">
+            <DocumentUpload variant="full" onSuccess={() => {}} />
+          </div>
+
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
             <Link href="/chat">
               <Button size="lg" className="gap-2 px-8">
                 Open Plumber Bot <ArrowRight className="h-4 w-4" />
