@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { streamMessage } from "@/lib/api";
+import { streamMessage, fetchProviders } from "@/lib/api";
 import {
   loadConversations,
   saveConversations,
@@ -27,11 +27,11 @@ export default function ChatWindow() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeId, setActiveIdState] = useState<string>("");
   const [loading, setLoading] = useState(false);
-  // Streaming text rendered live — kept separate from persisted conversations
   const [streamingText, setStreamingText] = useState<string | null>(null);
+  const [activeProvider, setActiveProvider] = useState<"groq" | "openai">("groq");
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Load from localStorage on mount
+  // Load conversations and active provider from backend on mount
   useEffect(() => {
     const saved = loadConversations();
     const savedActiveId = getActiveId();
@@ -49,6 +49,11 @@ export default function ChatWindow() {
       setActiveIdState(active);
       setActiveId(active);
     }
+
+    // Fetch active provider from backend as default
+    fetchProviders()
+      .then((r) => setActiveProvider(r.active))
+      .catch(() => {}); // silently fall back to "groq"
   }, []);
 
   useEffect(() => {
@@ -57,11 +62,10 @@ export default function ChatWindow() {
 
   const activeConvo = conversations.find((c) => c.id === activeId);
 
-  // Build display messages: persisted messages + live streaming bubble on top
   const displayMessages: ChatMessage[] = (() => {
     const base: ChatMessage[] = activeConvo ? [...activeConvo.messages] : [];
     if (streamingText !== null) {
-      base.push({ role: "bot", text: streamingText, streaming: true });
+      base.push({ role: "bot", text: streamingText, streaming: true, provider: activeProvider });
     }
     return [GREETING, ...base];
   })();
@@ -111,7 +115,6 @@ export default function ChatWindow() {
   async function handleSend(text: string) {
     if (!activeId) return;
 
-    // Add user message to persisted state
     updateConvo(activeId, (c) => ({
       ...c,
       title: c.history.length === 0 ? titleFromMessage(text) : c.title,
@@ -123,6 +126,7 @@ export default function ChatWindow() {
     setStreamingText("");
 
     const historySnapshot = activeConvo?.history ?? [];
+    const providerSnapshot = activeProvider;
     let botAnswer = "";
 
     try {
@@ -132,19 +136,18 @@ export default function ChatWindow() {
         (chunk) => {
           setLoading(false);
           botAnswer += chunk;
-          // Direct state update — no batching, no localStorage, just a string append
           setStreamingText((prev) => (prev ?? "") + chunk);
         },
         () => {},
+        providerSnapshot,
       );
 
-      // Stream done: move answer into persisted conversations, clear streaming bubble
       setStreamingText(null);
       updateConvo(activeId, (c) => ({
         ...c,
         messages: [
           ...c.messages,
-          { role: "bot", text: botAnswer, streaming: false },
+          { role: "bot", text: botAnswer, streaming: false, provider: providerSnapshot },
         ],
         history: [
           ...historySnapshot,
@@ -175,6 +178,8 @@ export default function ChatWindow() {
         onSelect={handleSelectConvo}
         onNew={handleNewConvo}
         onDelete={handleDeleteConvo}
+        activeProvider={activeProvider}
+        onProviderChange={setActiveProvider}
       />
 
       {/* Chat panel */}
@@ -186,6 +191,12 @@ export default function ChatWindow() {
           <div className="flex-1">
             <p className="text-sm font-semibold leading-tight">{BOT_NAME}</p>
             <p className="text-xs text-white/80">Online</p>
+          </div>
+          {/* Active provider badge in header */}
+          <div className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-white/30 ${
+            activeProvider === "openai" ? "text-emerald-300" : "text-orange-300"
+          }`}>
+            {activeProvider === "openai" ? "GPT-4o mini" : "LLaMA 3.3"}
           </div>
         </header>
 

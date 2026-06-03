@@ -29,12 +29,25 @@ def health() -> HealthResponse:
     return HealthResponse()
 
 
+@app.get("/providers")
+def get_providers():
+    """Return available LLM providers and which one is currently active."""
+    return {
+        "active": settings.llm_provider,
+        "available": ["groq", "openai"],
+        "models": {
+            "groq": settings.groq_model,
+            "openai": settings.openai_model,
+        },
+    }
+
+
 @app.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest) -> ChatResponse:
     from .rag import answer_question
 
     try:
-        answer, sources = answer_question(req.history, req.message)
+        answer, sources = answer_question(req.history, req.message, req.llm_provider)
     except Exception as exc:
         logger.exception("chat failed")
         raise HTTPException(status_code=500, detail="Failed to generate a response") from exc
@@ -49,7 +62,7 @@ async def stream_chat(req: ChatRequest) -> StreamingResponse:
 
     async def generate():
         try:
-            async for chunk in stream_answer(req.history, req.message):
+            async for chunk in stream_answer(req.history, req.message, req.llm_provider):
                 if chunk.startswith("\n__SOURCES__"):
                     payload = chunk[len("\n__SOURCES__"):]
                     yield f"event: sources\ndata: {payload}\n\n"

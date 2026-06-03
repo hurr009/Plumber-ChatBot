@@ -11,6 +11,7 @@ class ChatRequest(BaseModel):
     session_id: str = Field(..., min_length=1, description="Per-visitor session id")
     message: str = Field(..., min_length=1, max_length=4000)
     history: list[HistoryMessage] = Field(default=[], max_length=20)
+    llm_provider: str | None = Field(default=None, description="Override active LLM provider: 'groq' or 'openai'")
 
 
 class Source(BaseModel):

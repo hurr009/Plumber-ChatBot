@@ -16,6 +16,12 @@ export interface HistoryMessage {
   content: string;
 }
 
+export interface ProvidersResult {
+  active: "groq" | "openai";
+  available: string[];
+  models: Record<string, string>;
+}
+
 export function getSessionId(): string {
   if (typeof window === "undefined") return "server";
   let id = window.localStorage.getItem(SESSION_KEY);
@@ -26,6 +32,13 @@ export function getSessionId(): string {
   return id;
 }
 
+export async function fetchProviders(): Promise<ProvidersResult> {
+  const res = await fetch(`${API_URL}/providers`, {
+    headers: { "ngrok-skip-browser-warning": "1" },
+  });
+  if (!res.ok) throw new Error("Failed to fetch providers");
+  return res.json();
+}
 
 export async function sendMessage(message: string, history: HistoryMessage[]): Promise<ChatResult> {
   const res = await fetch(`${API_URL}/chat`, {
@@ -48,6 +61,7 @@ export async function streamMessage(
   history: HistoryMessage[],
   onChunk: (text: string) => void,
   onSources: (sources: Source[]) => void,
+  provider?: string,
 ): Promise<void> {
   const res = await fetch(`${API_URL}/chat/stream`, {
     method: "POST",
@@ -55,7 +69,7 @@ export async function streamMessage(
       "Content-Type": "application/json",
       "ngrok-skip-browser-warning": "1",
     },
-    body: JSON.stringify({ session_id: getSessionId(), message, history }),
+    body: JSON.stringify({ session_id: getSessionId(), message, history, llm_provider: provider ?? null }),
   });
 
   if (!res.ok) throw new Error(`Request failed (${res.status})`);

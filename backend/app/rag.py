@@ -45,33 +45,39 @@ def _answer_prompt(bot_name: str) -> str:
 
 
 @lru_cache
-def _build_chain():
+def _build_retriever():
     settings = get_settings()
-
     os.environ.setdefault("PINECONE_API_KEY", settings.pinecone_api_key)
-
     embeddings = FastEmbedEmbeddings(model_name=settings.embed_model)
-
     vector_store = PineconeVectorStore(
         index_name=settings.pinecone_index,
         embedding=embeddings,
         namespace=settings.pinecone_namespace,
         pinecone_api_key=settings.pinecone_api_key,
     )
-    retriever = vector_store.as_retriever(search_kwargs={"k": 4})
+    return vector_store.as_retriever(search_kwargs={"k": 4})
 
-    if settings.llm_provider == "openai":
-        llm = ChatOpenAI(
+
+def _make_llm(provider: str | None = None):
+    settings = get_settings()
+    effective = provider or settings.llm_provider
+    if effective == "openai":
+        return ChatOpenAI(
             model=settings.openai_model,
             temperature=0.2,
             api_key=settings.openai_api_key,
         )
-    else:
-        llm = ChatGroq(
-            model=settings.groq_model,
-            temperature=0.2,
-            api_key=settings.groq_api_key,
-        )
+    return ChatGroq(
+        model=settings.groq_model,
+        temperature=0.2,
+        api_key=settings.groq_api_key,
+    )
+
+
+def _build_chain(provider: str | None = None):
+    settings = get_settings()
+    retriever = _build_retriever()
+    llm = _make_llm(provider)
 
     contextualize_prompt = ChatPromptTemplate.from_messages([
         ("system", CONTEXTUALIZE_PROMPT),
@@ -103,12 +109,12 @@ def _to_lc_messages(history: list[HistoryMessage]):
     return result
 
 
-async def stream_answer(history: list[HistoryMessage], message: str):
+async def stream_answer(history: list[HistoryMessage], message: str, provider: str | None = None):
     """Stream answer tokens then yield sources as a final JSON line."""
     import json
     from langchain_core.messages import AIMessageChunk
 
-    chain = _build_chain()
+    chain = _build_chain(provider)
     lc_history = _to_lc_messages(history)
 
     full_answer = ""
@@ -136,9 +142,9 @@ async def stream_answer(history: list[HistoryMessage], message: str):
     yield "\n__SOURCES__" + json.dumps([s.model_dump() for s in sources])
 
 
-def answer_question(history: list[HistoryMessage], message: str) -> tuple[str, list[Source]]:
+def answer_question(history: list[HistoryMessage], message: str, provider: str | None = None) -> tuple[str, list[Source]]:
     """Run the RAG chain for one turn (non-streaming)."""
-    chain = _build_chain()
+    chain = _build_chain(provider)
     lc_history = _to_lc_messages(history)
 
     result = chain.invoke({"input": message, "chat_history": lc_history})
