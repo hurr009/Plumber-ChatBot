@@ -19,6 +19,11 @@ body {
   background-size: 24px 24px;
 }
 
+.dark .chat-bg {
+  background-color: #020617;
+  background-image: radial-gradient(#1e293b 1px, transparent 1px);
+}
+
 /* Smooth scrollbar */
 ::-webkit-scrollbar {
   width: 4px;
