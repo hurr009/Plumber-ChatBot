@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 
 export interface ChatMessage {
@@ -34,6 +37,77 @@ function UserAvatar() {
   );
 }
 
+// A single word that blurs in on mount
+function BlurWord({ word, index }: { word: string; index: number }) {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setVisible(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  return (
+    <span
+      style={{
+        display: "inline",
+        transition: "opacity 0.42s ease, filter 0.42s ease",
+        opacity: visible ? 1 : 0,
+        filter: visible ? "blur(0px)" : "blur(6px)",
+        // small stagger based on position so rapid bursts still feel smooth
+        transitionDelay: `${Math.min(index * 8, 80)}ms`,
+      }}
+    >
+      {word}{" "}
+    </span>
+  );
+}
+
+// Renders streaming text as blur-in words + blinking caret
+function StreamingBubble({ text }: { text: string }) {
+  // Split on spaces but hold back the last "word" if it doesn't end with a space
+  // (it may be a partial token still being assembled)
+  const endsWithSpace = text.endsWith(" ") || text.endsWith("\n");
+  const parts = text.split(/(\s+)/);
+
+  // Build revealed words: everything except the trailing fragment when mid-word
+  const words: string[] = [];
+  let trailingFragment = "";
+
+  if (endsWithSpace) {
+    // All words are complete — reveal everything
+    const tokens = text.trimEnd().split(/\s+/).filter(Boolean);
+    words.push(...tokens);
+  } else {
+    // Hold back the last token as it may still be growing
+    const tokens = text.split(/\s+/).filter(Boolean);
+    words.push(...tokens.slice(0, -1));
+    trailingFragment = tokens[tokens.length - 1] ?? "";
+  }
+
+  return (
+    <span className="whitespace-pre-wrap leading-relaxed">
+      {words.map((word, i) => (
+        <BlurWord key={`${i}-${word}`} word={word} index={i} />
+      ))}
+      {trailingFragment && (
+        <span style={{ opacity: 0.85 }}>{trailingFragment}</span>
+      )}
+      <span
+        className="animate-blink"
+        style={{
+          display: "inline-block",
+          width: "2px",
+          height: "1em",
+          background: "currentColor",
+          marginLeft: "2px",
+          verticalAlign: "text-bottom",
+          borderRadius: "1px",
+        }}
+      />
+    </span>
+  );
+}
+
 export default function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === "user";
   const providerMeta = !isUser && message.provider ? PROVIDER_META[message.provider] : null;
@@ -51,8 +125,10 @@ export default function MessageBubble({ message }: { message: ChatMessage }) {
               : "rounded-tl-sm bg-white text-slate-800 shadow-bubble ring-1 ring-slate-100",
           ].join(" ")}
         >
-          {isUser || message.streaming ? (
+          {isUser ? (
             <span className="whitespace-pre-wrap">{message.text}</span>
+          ) : message.streaming ? (
+            <StreamingBubble text={message.text} />
           ) : (
             <div className="prose-sm prose-slate max-w-none">
               <ReactMarkdown

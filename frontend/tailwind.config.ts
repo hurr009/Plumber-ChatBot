@@ -45,6 +45,10 @@ const config: Config = {
           "0%, 100%": { opacity: "1" },
           "50%":      { opacity: "0.4" },
         },
+        blink: {
+          "0%, 100%": { opacity: "1" },
+          "50%":      { opacity: "0" },
+        },
       },
       animation: {
         "fade-in":        "fade-in 0.25s ease-out",
@@ -52,6 +56,7 @@ const config: Config = {
         "slide-in-right": "slide-in-right 0.25s ease-out",
         "bounce2":        "bounce2 1.4s infinite ease-in-out both",
         "pulse2":         "pulse2 2s infinite ease-in-out",
+        "blink":          "blink 1.05s steps(1) infinite",
       },
       boxShadow: {
         "bubble": "0 1px 3px 0 rgb(0 0 0 / 0.08), 0 1px 2px -1px rgb(0 0 0 / 0.06)",
