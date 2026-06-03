@@ -27,9 +27,9 @@ export default function ChatWindow() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeId, setActiveIdState] = useState<string>("");
   const [loading, setLoading] = useState(false);
+  // Streaming text rendered live — kept separate from persisted conversations
+  const [streamingText, setStreamingText] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const pendingChunks = useRef<string>("");
-  const rafId = useRef<number | null>(null);
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -53,12 +53,18 @@ export default function ChatWindow() {
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [conversations, activeId, loading]);
+  }, [conversations, activeId, loading, streamingText]);
 
   const activeConvo = conversations.find((c) => c.id === activeId);
-  const displayMessages: ChatMessage[] = activeConvo
-    ? [GREETING, ...activeConvo.messages]
-    : [GREETING];
+
+  // Build display messages: persisted messages + live streaming bubble on top
+  const displayMessages: ChatMessage[] = (() => {
+    const base: ChatMessage[] = activeConvo ? [...activeConvo.messages] : [];
+    if (streamingText !== null) {
+      base.push({ role: "bot", text: streamingText, streaming: true });
+    }
+    return [GREETING, ...base];
+  })();
 
   function updateConvo(id: string, updater: (c: Conversation) => Conversation) {
     setConversations((prev) => {
@@ -105,36 +111,18 @@ export default function ChatWindow() {
   async function handleSend(text: string) {
     if (!activeId) return;
 
-    // Optimistically add user message to UI
+    // Add user message to persisted state
     updateConvo(activeId, (c) => ({
       ...c,
-      // auto-title from first user message
       title: c.history.length === 0 ? titleFromMessage(text) : c.title,
       messages: [...c.messages, { role: "user", text }],
       updatedAt: Date.now(),
     }));
 
     setLoading(true);
-    pendingChunks.current = "";
+    setStreamingText("");
 
     const historySnapshot = activeConvo?.history ?? [];
-
-    function flush() {
-      rafId.current = null;
-      const buffered = pendingChunks.current;
-      if (!buffered) return;
-      pendingChunks.current = "";
-      updateConvo(activeId, (c) => {
-        const last = c.messages[c.messages.length - 1];
-        if (last?.role === "bot") {
-          const updated = [...c.messages];
-          updated[updated.length - 1] = { role: "bot", text: last.text + buffered, streaming: true };
-          return { ...c, messages: updated };
-        }
-        return { ...c, messages: [...c.messages, { role: "bot", text: buffered, streaming: true }] };
-      });
-    }
-
     let botAnswer = "";
 
     try {
@@ -144,34 +132,29 @@ export default function ChatWindow() {
         (chunk) => {
           setLoading(false);
           botAnswer += chunk;
-          pendingChunks.current += chunk;
-          if (rafId.current === null) {
-            rafId.current = requestAnimationFrame(flush);
-          }
+          // Direct state update — no batching, no localStorage, just a string append
+          setStreamingText((prev) => (prev ?? "") + chunk);
         },
         () => {},
       );
 
-      if (rafId.current !== null) cancelAnimationFrame(rafId.current);
-      flush();
-
-      // Mark streaming done + persist history
-      updateConvo(activeId, (c) => {
-        const updated = [...c.messages];
-        const last = updated[updated.length - 1];
-        if (last?.role === "bot") updated[updated.length - 1] = { ...last, streaming: false };
-        return {
-          ...c,
-          messages: updated,
-          history: [
-            ...historySnapshot,
-            { role: "user", content: text },
-            { role: "assistant", content: botAnswer },
-          ],
-          updatedAt: Date.now(),
-        };
-      });
+      // Stream done: move answer into persisted conversations, clear streaming bubble
+      setStreamingText(null);
+      updateConvo(activeId, (c) => ({
+        ...c,
+        messages: [
+          ...c.messages,
+          { role: "bot", text: botAnswer, streaming: false },
+        ],
+        history: [
+          ...historySnapshot,
+          { role: "user", content: text },
+          { role: "assistant", content: botAnswer },
+        ],
+        updatedAt: Date.now(),
+      }));
     } catch {
+      setStreamingText(null);
       updateConvo(activeId, (c) => ({
         ...c,
         messages: [
@@ -213,7 +196,7 @@ export default function ChatWindow() {
           {loading && <TypingIndicator />}
         </div>
 
-        <ChatInput onSend={handleSend} disabled={loading} />
+        <ChatInput onSend={handleSend} disabled={loading || streamingText !== null} />
 
         <p className="bg-white pb-2 text-center text-[10px] text-slate-400">
           Powered by {BOT_NAME}

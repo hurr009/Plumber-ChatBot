@@ -5,19 +5,24 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    # Groq (LLM generation)
-    groq_api_key: str
+    # LLM provider: "groq" or "openai"
+    llm_provider: str = "groq"
+
+    # Groq
+    groq_api_key: str = ""
+    groq_model: str = "llama-3.3-70b-versatile"
+
+    # OpenAI
+    openai_api_key: str = ""
+    openai_model: str = "gpt-4o-mini"
 
     # Pinecone
     pinecone_api_key: str
     pinecone_index: str = "plumber-bot"
     pinecone_namespace: str = "plumber"
 
-    # Models
-    groq_model: str = "llama-3.3-70b-versatile"
     # FastEmbed model (local ONNX, no API key, no torch)
     embed_model: str = "BAAI/bge-small-en-v1.5"
-    # Dimension of BAAI/bge-small-en-v1.5. Pinecone index must match.
     embed_dim: int = 384
 
     # CORS: comma-separated origins allowed to call the API

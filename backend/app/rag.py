@@ -8,6 +8,7 @@ from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_community.embeddings import FastEmbedEmbeddings
 from langchain_groq import ChatGroq
+from langchain_openai import ChatOpenAI
 from langchain_pinecone import PineconeVectorStore
 
 from .config import get_settings
@@ -59,11 +60,18 @@ def _build_chain():
     )
     retriever = vector_store.as_retriever(search_kwargs={"k": 4})
 
-    llm = ChatGroq(
-        model=settings.groq_model,
-        temperature=0.2,
-        api_key=settings.groq_api_key,
-    )
+    if settings.llm_provider == "openai":
+        llm = ChatOpenAI(
+            model=settings.openai_model,
+            temperature=0.2,
+            api_key=settings.openai_api_key,
+        )
+    else:
+        llm = ChatGroq(
+            model=settings.groq_model,
+            temperature=0.2,
+            api_key=settings.groq_api_key,
+        )
 
     contextualize_prompt = ChatPromptTemplate.from_messages([
         ("system", CONTEXTUALIZE_PROMPT),
