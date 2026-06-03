@@ -21,7 +21,6 @@ export default function ChatInput({
   const [value, setValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Auto-resize textarea
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -40,10 +39,13 @@ export default function ChatInput({
   const canSend = value.trim().length > 0 && !disabled;
 
   return (
-    <div className="border-t border-slate-200 bg-white px-4 py-3">
+    <div className="border-t border-slate-200 bg-white px-4 py-3 dark:bg-slate-900 dark:border-slate-700">
       <div className={[
         "flex items-end gap-3 rounded-2xl border bg-white px-4 py-3 transition-all duration-150",
-        disabled ? "border-slate-200 opacity-70" : "border-slate-300 focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/20",
+        "dark:bg-slate-800 dark:border-slate-700",
+        disabled
+          ? "border-slate-200 opacity-70 dark:border-slate-700"
+          : "border-slate-300 focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/20 dark:border-slate-600 dark:focus-within:border-brand dark:focus-within:ring-brand/30",
       ].join(" ")}>
         <textarea
           ref={textareaRef}
@@ -58,7 +60,7 @@ export default function ChatInput({
           }}
           disabled={disabled}
           placeholder={disabled ? "Generating response…" : "Ask me anything about plumbing…"}
-          className="flex-1 resize-none bg-transparent text-sm text-slate-800 placeholder:text-slate-400 outline-none disabled:cursor-not-allowed leading-relaxed"
+          className="flex-1 resize-none bg-transparent text-sm text-slate-800 placeholder:text-slate-400 outline-none disabled:cursor-not-allowed leading-relaxed dark:text-slate-100 dark:placeholder:text-slate-500"
         />
         <button
           onClick={submit}
@@ -67,15 +69,16 @@ export default function ChatInput({
             "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all duration-150",
             canSend
               ? "bg-brand text-white shadow-md hover:bg-brand-dark hover:shadow-lg active:scale-95"
-              : "bg-slate-100 text-slate-400 cursor-not-allowed",
+              : "bg-slate-100 text-slate-400 cursor-not-allowed dark:bg-slate-700 dark:text-slate-500",
           ].join(" ")}
           aria-label="Send message"
         >
           <SendIcon />
         </button>
       </div>
-      <p className="mt-1.5 text-center text-[10px] text-slate-400">
-        Press <kbd className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[9px]">Enter</kbd> to send · <kbd className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[9px]">Shift+Enter</kbd> for new line
+      <p className="mt-1.5 text-center text-[10px] text-slate-400 dark:text-slate-600">
+        Press <kbd className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[9px] dark:bg-slate-800">Enter</kbd> to send ·{" "}
+        <kbd className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[9px] dark:bg-slate-800">Shift+Enter</kbd> for new line
       </p>
     </div>
   );
