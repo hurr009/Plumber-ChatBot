@@ -27,26 +27,6 @@ export function getSessionId(): string {
   return id;
 }
 
-export interface UploadResult {
-  chunks: number;
-  filename: string;
-}
-
-export async function uploadDocument(file: File): Promise<UploadResult> {
-  const form = new FormData();
-  form.append("file", file);
-  const res = await fetch(`${API_URL}/upload`, {
-    method: "POST",
-    headers: { "ngrok-skip-browser-warning": "1" },
-    body: form,
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: "Upload failed" }));
-    throw new Error(err.detail ?? "Upload failed");
-  }
-  return res.json();
-}
-
 export async function fetchProviders(): Promise<ProvidersResult> {
   const res = await fetch(`${API_URL}/providers`, {
     headers: { "ngrok-skip-browser-warning": "1" },

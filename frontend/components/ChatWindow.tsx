@@ -20,7 +20,6 @@ import { cn } from "@/lib/utils";
 import MessageBubble, { ChatMessage } from "./MessageBubble";
 import TypingIndicator from "./TypingIndicator";
 import ChatInput from "./ChatInput";
-import DocumentUpload from "./DocumentUpload";
 
 const BOT_NAME = process.env.NEXT_PUBLIC_BOT_NAME ?? "Plumber Bot";
 
@@ -274,11 +273,6 @@ export default function ChatWindow() {
                 );
               })}
             </div>
-            <Separator className="my-1" />
-            <div className="px-4 pt-3 pb-1">
-              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Knowledge Base</p>
-            </div>
-            <DocumentUpload variant="compact" />
           </ScrollArea>
         ) : (
           <>

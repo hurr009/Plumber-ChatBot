@@ -4,7 +4,6 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import DocumentUpload from "@/components/DocumentUpload";
 import {
   Wrench, Zap, Shield, Clock, MessageSquare,
   ChevronRight, CheckCircle2, Star, ArrowRight,
@@ -286,14 +285,10 @@ export default function LandingPage() {
             Ready to give your customers instant answers?
           </h2>
           <p className="mt-4 text-muted-foreground">
-            Upload your knowledge base PDF, then open the chat — no sign-up required.
+            Open the chat app and start asking questions right now — no sign-up required.
           </p>
 
-          <div className="mt-8 w-full max-w-md mx-auto text-left">
-            <DocumentUpload variant="full" onSuccess={() => {}} />
-          </div>
-
-          <div className="mt-6 flex flex-wrap justify-center gap-3">
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Link href="/chat">
               <Button size="lg" className="gap-2 px-8">
                 Open Plumber Bot <ArrowRight className="h-4 w-4" />
