@@ -1,15 +1,10 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-
-function SendIcon({ size = 16 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z"
-        stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  );
-}
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { SendHorizonal } from "lucide-react";
 
 export default function ChatInput({
   onSend,
@@ -39,15 +34,14 @@ export default function ChatInput({
   const canSend = value.trim().length > 0 && !disabled;
 
   return (
-    <div className="border-t border-slate-200 bg-white px-4 py-3 dark:bg-slate-900 dark:border-slate-700">
+    <div className="border-t border-border bg-background px-4 py-3">
       <div className={[
-        "flex items-end gap-3 rounded-2xl border bg-white px-4 py-3 transition-all duration-150",
-        "dark:bg-slate-800 dark:border-slate-700",
+        "flex items-end gap-2 rounded-xl border bg-background px-3 py-2 transition-all duration-150",
         disabled
-          ? "border-slate-200 opacity-70 dark:border-slate-700"
-          : "border-slate-300 focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/20 dark:border-slate-600 dark:focus-within:border-brand dark:focus-within:ring-brand/30",
+          ? "opacity-70 border-border"
+          : "border-input focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20",
       ].join(" ")}>
-        <textarea
+        <Textarea
           ref={textareaRef}
           rows={1}
           value={value}
@@ -60,25 +54,26 @@ export default function ChatInput({
           }}
           disabled={disabled}
           placeholder={disabled ? "Generating response…" : "Ask me anything about plumbing…"}
-          className="flex-1 resize-none bg-transparent text-sm text-slate-800 placeholder:text-slate-400 outline-none disabled:cursor-not-allowed leading-relaxed dark:text-slate-100 dark:placeholder:text-slate-500"
+          className="min-h-0 flex-1 resize-none border-0 bg-transparent p-0 text-sm shadow-none outline-none focus-visible:ring-0 disabled:cursor-not-allowed leading-relaxed"
         />
-        <button
-          onClick={submit}
-          disabled={!canSend}
-          className={[
-            "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all duration-150",
-            canSend
-              ? "bg-brand text-white shadow-md hover:bg-brand-dark hover:shadow-lg active:scale-95"
-              : "bg-slate-100 text-slate-400 cursor-not-allowed dark:bg-slate-700 dark:text-slate-500",
-          ].join(" ")}
-          aria-label="Send message"
-        >
-          <SendIcon />
-        </button>
+        <Tooltip>
+          <TooltipTrigger>
+            <Button
+              onClick={submit}
+              disabled={!canSend}
+              size="icon"
+              className="h-8 w-8 shrink-0 rounded-lg"
+              aria-label="Send message"
+            >
+              <SendHorizonal className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">Send (Enter)</TooltipContent>
+        </Tooltip>
       </div>
-      <p className="mt-1.5 text-center text-[10px] text-slate-400 dark:text-slate-600">
-        Press <kbd className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[9px] dark:bg-slate-800">Enter</kbd> to send ·{" "}
-        <kbd className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[9px] dark:bg-slate-800">Shift+Enter</kbd> for new line
+      <p className="mt-1.5 text-center text-[10px] text-muted-foreground">
+        <kbd className="rounded bg-muted px-1 py-0.5 font-mono text-[9px]">Enter</kbd> to send ·{" "}
+        <kbd className="rounded bg-muted px-1 py-0.5 font-mono text-[9px]">Shift+Enter</kbd> for new line
       </p>
     </div>
   );
